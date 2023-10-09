@@ -1,0 +1,244 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <time.h>
+
+#define FILE_NAME "large_data.txt"
+#define TEMP_FILE_PREFIX "temp_file_"
+#define CHUNK_SIZE 1000 // Number of elements to process at once
+
+// Function to generate random data and save it to a text file
+void generateRandomData() {
+    FILE *file = fopen(FILE_NAME, "w");
+    if (file == NULL) {
+        perror("Error opening file for writing");
+        exit(1);
+    }
+
+    srand(time(NULL)); // Seed the random number generator with the current time
+
+    for (int i = 0; i < CHUNK_SIZE * 10; i++) {
+        int randomValue = rand() % 1000000 + 1;
+        fprintf(file, "%d\n", randomValue);
+    }
+
+    fclose(file);
+}
+
+// Function to compare integers for quicksort
+int compareIntegers(const void *a, const void *b) {
+    return (*(int *)a - *(int *)b);
+}
+
+// Function to sort a chunk of data in a text file using quicksort
+void quickSortChunk(FILE *inputFile, FILE *outputFile, int chunkSize) {
+    int *chunk = (int *)malloc(chunkSize * sizeof(int));
+    if (chunk == NULL) {
+        perror("Memory allocation failed");
+        exit(1);
+    }
+
+    for (int i = 0; i < chunkSize; i++) {
+        char line[256];
+        if (fgets(line, sizeof(line), inputFile) != NULL) {
+            chunk[i] = atoi(line);
+        }
+    }
+
+    qsort(chunk, chunkSize, sizeof(int), compareIntegers);
+
+    for (int i = 0; i < chunkSize; i++) {
+        fprintf(outputFile, "%d\n", chunk[i]);
+    }
+
+    free(chunk);
+}
+
+// Function to perform binary search in a text file
+int binarySearchInSortedFile(FILE *file, int target, int fileSize) {
+    int left = 0;
+    int right = fileSize - 1;
+
+    while (left <= right) {
+        int mid = left + (right - left) / 2;
+        fseek(file, mid * sizeof(int), SEEK_SET);
+
+        char line[256];
+        fgets(line, sizeof(line), file);
+
+        int value = atoi(line);
+
+        if (value == target)
+            return 1; // Element found
+        else if (value < target)
+            left = mid + 1;
+        else
+            right = mid - 1;
+    }
+
+    return 0; // Element not found
+}
+
+int main() {
+    generateRandomData(); // Generate random data and save it to the file
+
+    FILE *inputFile = fopen(FILE_NAME, "r");
+    if (inputFile == NULL) {
+        perror("Error opening input file");
+        return 1;
+    }
+
+    FILE *outputFile = fopen(TEMP_FILE_PREFIX "0.txt", "w");
+    if (outputFile == NULL) {
+        perror("Error opening temporary output file");
+        fclose(inputFile);
+        return 1;
+    }
+
+    int chunkCount = 0;
+    int fileSize = 0;
+
+    // Read data in chunks, sort each chunk, and write to temporary files
+    while (!feof(inputFile)) {
+        quickSortChunk(inputFile, outputFile, CHUNK_SIZE);
+        fclose(outputFile);
+
+        chunkCount++;
+
+        if (!feof(inputFile)) {
+            char tempFileName[256];
+            snprintf(tempFileName, sizeof(tempFileName), TEMP_FILE_PREFIX "%d.txt", chunkCount);
+            outputFile = fopen(tempFileName, "w");
+            if (outputFile == NULL) {
+                perror("Error opening temporary output file");
+                fclose(inputFile);
+                return 1;
+            }
+        }
+        fileSize += CHUNK_SIZE;
+    }
+
+    fclose(inputFile);
+
+    // Merge sorted chunks into a single sorted file
+    FILE *finalOutputFile = fopen("sorted_data.txt", "w");
+    if (finalOutputFile == NULL) {
+        perror("Error opening final output file");
+        return 1;
+    }
+
+    FILE **chunkFiles = (FILE **)malloc(chunkCount * sizeof(FILE *));
+    if (chunkFiles == NULL) {
+        perror("Memory allocation failed");
+        return 1;
+    }
+
+    for (int i = 0; i < chunkCount; i++) {
+        char tempFileName[256];
+        snprintf(tempFileName, sizeof(tempFileName), TEMP_FILE_PREFIX "%d.txt", i);
+        chunkFiles[i] = fopen(tempFileName, "r");
+        if (chunkFiles[i] == NULL) {
+            perror("Error opening temporary chunk file");
+            fclose(finalOutputFile);
+            free(chunkFiles);
+            return 1;
+        }
+    }
+
+    // Merge the chunks into a single sorted file
+    for (int i = 0; i < chunkCount; i++) {
+        int value;
+        while (fscanf(chunkFiles[i], "%d", &value) != EOF) {
+            fprintf(finalOutputFile, "%d\n", value);
+        }
+        fclose(chunkFiles[i]);
+        char tempFileName[256];
+        snprintf(tempFileName, sizeof(tempFileName), TEMP_FILE_PREFIX "%d.txt", i);
+        remove(tempFileName);
+    }
+
+    fclose(finalOutputFile);
+    free(chunkFiles);
+
+    // Perform binary search in the sorted file
+    FILE *sortedFile = fopen("sorted_data.txt", "r");
+    if (sortedFile == NULL) {
+        perror("Error opening sorted file");
+        return 1;
+    }
+
+    int target = rand() % 1000000 + 1; // Generate a random target value
+    printf("Searching for target value: %d\n", target);
+    int result = binarySearchInSortedFile(sortedFile, target, fileSize);
+
+    if (result) {
+        printf("Element %d found in the file\n", target);
+    } else {
+        printf("Element %d not found in the file\n", target);
+    }
+
+    fclose(sortedFile);
+
+    return 0;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/*
+Certainly! In this example, we will generate random data, sort it using the quicksort algorithm, and then perform a binary search in the sorted file without using an array.
+
+
+
+In this example:
+
+We generate random data using the generateRandomData function and save it to the file "large_data.txt." You can adjust the chunk size and the maximum random value as needed.
+
+We read data from the input file in chunks, sort each chunk using quicksort, and write the sorted chunks to temporary files.
+
+After sorting all chunks, we merge them into a single sorted file.
+
+We then perform a binary search for a random target value in the sorted file and print whether the target value was found.
+
+Make sure to adjust parameters like CHUNK_SIZE and MAX_RANDOM_VALUE according to your requirements.
+
+
+
+
+
+
+
+
+
+vi seach.c 
+
+gcc seach.c -o seach 
+
+./seach 
+
+*/
+
+
+
+
+
+
